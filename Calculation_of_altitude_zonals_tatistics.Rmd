@@ -1,0 +1,59 @@
+---
+title: "Calculation of altitude (zonal statistics)"
+author: "Kadlec Ivo"
+date: "2024-06-10"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: yes
+    toc_float: yes
+    highlight: pygments
+    theme: flatly
+    number_sections: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(dpi=200, echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r library, warning=FALSE}
+library(sf)
+library(elevatr)
+library(raster)
+library(dplyr)
+library(tidyverse)
+```
+
+# Loading data
+Data is loaded in csv format, which must include coordinates (it is recommended to have them named "X" and "Y"). Other information/columns are optional and included in the final dataset with elevation. 
+
+```{r, message=FALSE}
+data <- read.csv("data.csv", sep = ";", header = T, dec = ",") # load data
+```
+
+# Preparation for analysis
+The script uses the "elevatr" package to retrieve a raster layer containing elevation data, which allows access to web services and returns elevation data in the form of either points ("sf" object) or a raster ("raster" object). By default, the script uses AmazonWeb Services. 
+```{r, warning=FALSE}
+# Converting coordinates to points and then creating a buffer around them
+# Note: The size of the buffer is specified in meters in this case, it may vary if using a different coordinate system.
+df_sf <- sf::st_as_sf(data, coords = c("X", "Y"), crs = 4326)
+df_sf_buf <- st_buffer(df_sf, 8000) 
+
+# Loading the raster
+elevation <- get_elev_raster(df_sf_buf, z = 11) #import elevation raster
+
+# Preview of the raster with altitude and the created polygons
+plot(elevation)
+plot(st_geometry(df_sf_buf), add = TRUE, col = "blue")
+```
+
+# Zonal statistic
+```{r}
+# Zonal statistics
+df_alt <- raster::extract(elevation,df_sf_buf, fun=mean) %>% 
+  cbind(data,.) # Linking the results to the original dataset
+names(df_alt)[ncol(df_alt)] <- "altitude [m]"
+head(df_alt)
+
+write.csv(df_alt, "pack_alt_DEU.csv", sep=";") # Save as csv
+```
+
